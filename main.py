@@ -9,8 +9,11 @@ DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 intents = discord.Intents.default()
 intents.message_content = True
 
-if not discord.opus.is_loaded():
-    discord.opus.load_opus('libopus')
+try:
+    if not discord.opus.is_loaded():
+        discord.opus.load_opus('libopus')
+except Exception as e:
+    print(f"Opus load error: {e}")
     
 bot = commands.Bot(command_prefix="!", intents=intents)
 
