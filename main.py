@@ -13,14 +13,15 @@ import ctypes
 import ctypes.util
 
 try:
-    opus_path = ctypes.util.find_library('opus')
-    if opus_path:
-        discord.opus.load_opus(opus_path)
-        print(f"Successfully loaded Opus from: {opus_path}")
-    else:
-        discord.opus.load_opus('/usr/lib/x86_64-linux-gnu/libopus.so.0')
+    if not discord.opus.is_loaded():
+        lib = ctypes.util.find_library('opus')
+        if lib:
+            discord.opus.load_opus(lib)
+        else:
+            discord.opus.load_opus('libopus.so.0')
+    print("Opus loaded successfully!")
 except Exception as e:
-    print(f"Opus loading failed: {e}")
+    print(f"Opus loading note: {e}")
     
 bot = commands.Bot(command_prefix="!", intents=intents)
 
