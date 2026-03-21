@@ -1,5 +1,5 @@
 [variables]
-PYTHON_VERSION = ’3.10‘
+PYTHON_VERSION = '3.10'
 
 [setup]
-pkgs = [’python310‘, ’ffmpeg‘]
+pkgs = ['python310', 'ffmpeg']
