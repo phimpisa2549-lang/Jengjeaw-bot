@@ -9,6 +9,9 @@ DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 intents = discord.Intents.default()
 intents.message_content = True
 
+if not discord.opus.is_loaded():
+    discord.opus.load_opus('libopus.so.0')
+    
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 YDL_OPTIONS = {
