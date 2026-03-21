@@ -88,9 +88,9 @@ async def queue(ctx):
 async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop() # เมื่อหยุด play_next จะทำงานอัตโนมัติ
-        await ctx.send("⏭️ ข้ามเพลงให้แล้วงับ!")
+        await ctx.send("⏭️ ไปเพลงต่อไปดีกว่างับ!")
     else:
-        await ctx.send("ไม่มีเพลงให้ข้ามจ้า❌")
+        await ctx.send("ไม่มีเพลงให้ข้ามจ้า ❌")
 
 @bot.command()
 async def stop(ctx):
