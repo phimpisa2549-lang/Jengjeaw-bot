@@ -10,7 +10,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 if not discord.opus.is_loaded():
-    discord.opus.load_opus('libopus.so.0')
+    discord.opus.load_opus('libopus')
     
 bot = commands.Bot(command_prefix="!", intents=intents)
 
