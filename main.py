@@ -9,11 +9,18 @@ DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 intents = discord.Intents.default()
 intents.message_content = True
 
+import ctypes
+import ctypes.util
+
 try:
-    if not discord.opus.is_loaded():
-        discord.opus.load_opus('libopus')
+    opus_path = ctypes.util.find_library('opus')
+    if opus_path:
+        discord.opus.load_opus(opus_path)
+        print(f"Successfully loaded Opus from: {opus_path}")
+    else:
+        discord.opus.load_opus('/usr/lib/x86_64-linux-gnu/libopus.so.0')
 except Exception as e:
-    print(f"Opus load error: {e}")
+    print(f"Opus loading failed: {e}")
     
 bot = commands.Bot(command_prefix="!", intents=intents)
 
