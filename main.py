@@ -9,7 +9,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# สร้างรายการเก็บคิวเพลง
+# --- ระบบคิวเพลงแบบปรับปรุงใหม่ ---
 song_queue = []
 
 YDL_OPTIONS = {
@@ -24,6 +24,19 @@ FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn'
 }
+
+def play_next(ctx):
+    if len(song_queue) > 0:
+        # ลบเพลงที่เพิ่งเล่นจบออกจากคิว
+        song_queue.pop(0)
+        
+        # ถ้ายังมีเพลงเหลือในคิว ให้เล่นเพลงถัดไป
+        if len(song_queue) > 0:
+            next_song = song_queue[0]
+            url = next_song['url']
+            source = discord.FFmpegOpusAudio.from_probe(url, **FFMPEG_OPTIONS)
+            ctx.voice_client.play(source, after=lambda e: play_next(ctx))
+            asyncio.run_coroutine_threadsafe(ctx.send(f"▶️ เพลงถัดไปงับ: **{next_song['title']}**"), bot.loop)
 
 @bot.event
 async def on_ready():
@@ -44,19 +57,15 @@ async def play(ctx, *, search):
                 if 'entries' in info:
                     info = info['entries'][0]
                 
-                url = info['url']
-                title = info['title']
+                song_data = {'url': info['url'], 'title': info['title']}
+                song_queue.append(song_data)
                 
-                # เพิ่มชื่อเพลงลงในคิว
-                song_queue.append(title)
-                
-                source = await discord.FFmpegOpusAudio.from_probe(url, **FFMPEG_OPTIONS)
-                
-                if voice_client.is_playing():
-                    await ctx.send(f"เพิ่มเพลง **{title}** ลงในคิวแล้วค่า! (รอเพลงแรกจบก่อนนะ)")
+                if not voice_client.is_playing():
+                    source = await discord.FFmpegOpusAudio.from_probe(song_data['url'], **FFMPEG_OPTIONS)
+                    voice_client.play(source, after=lambda e: play_next(ctx))
+                    await ctx.send(f" ตอนนี้กำลังเล่น: **{song_data['title']}**🩷")
                 else:
-                    voice_client.play(source, after=lambda e: song_queue.pop(0) if song_queue else None)
-                    await ctx.send(f"ตอนนี้กำลังเล่น: **{title}** 🎵")
+                    await ctx.send(f"🔅 เพิ่มเพลง: **{song_data['title']}**ลงในคิวเพลงเเล้วค่า!(ลำดับที่ {len(song_queue)-1})")
             except Exception as e:
                 await ctx.send("หาเพลงไม่เจอค่า ลองพิมพ์ชื่อเพลงใหม่อีกทีนะ")
 
@@ -64,21 +73,29 @@ async def play(ctx, *, search):
 @bot.command()
 async def queue(ctx):
     if not song_queue:
-        await ctx.send("ตอนนี้ยังไม่มีคิวเพลง 🎶")
+        return await ctx.send("ตอนนี้คิวว่างเลยคับ 🎶")
+    
+    msg = "**🌟 รายการเพลงในคิว:**\n"
+    for i, song in enumerate(song_queue):
+        if i == 0:
+            msg += f"🎀 กำลังเล่น: {song['title']}\n"
+        else:
+            msg += f"{i}. {song['title']}\n"
+    await ctx.send(msg)
+
+# --- คำสั่งใหม่: ข้ามเพลง ---
+@bot.command()
+async def skip(ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        ctx.voice_client.stop() # เมื่อหยุด play_next จะทำงานอัตโนมัติ
+        await ctx.send("⏭️ ข้ามเพลงให้แล้วงับ!")
     else:
-        # แสดงรายการเพลงในคิว
-        msg = "**รายการคิวเพลงตอนนี้:**\n"
-        for i, title in enumerate(song_queue):
-            if i == 0:
-                msg += f"▶️ กำลังเล่น: {title}\n"
-            else:
-                msg += f"{i}. {title}\n"
-        await ctx.send(msg)
+        await ctx.send("ไม่มีเพลงให้ข้ามจ้า❌")
 
 @bot.command()
 async def stop(ctx):
     if ctx.voice_client:
-        song_queue.clear() # ล้างคิวเมื่อปิดบอท
+        song_queue.clear()
         await ctx.voice_client.disconnect()
         await ctx.send("ปิดเพลงและล้างคิวเรียบร้อยจ้า!")
 
