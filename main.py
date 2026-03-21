@@ -1,28 +1,8 @@
-import os
-import asyncio
 import discord
 from discord.ext import commands
 import yt_dlp
+import os
 
-DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
-
-intents = discord.Intents.default()
-intents.message_content = True
-
-import ctypes
-import ctypes.util
-
-try:
-    if not discord.opus.is_loaded():
-        lib = ctypes.util.find_library('opus')
-        if lib:
-            discord.opus.load_opus(lib)
-        else:
-            discord.opus.load_opus('libopus.so.0')
-    print("Opus loaded successfully!")
-except Exception as e:
-    print(f"Opus loading note: {e}")
-    
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 YDL_OPTIONS = {
