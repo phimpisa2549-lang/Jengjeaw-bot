@@ -3,7 +3,7 @@ from discord.ext import commands
 import yt_dlp, spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
-# --- ตั้งค่าพื้นฐาน ---
+# --- 1. ตั้งค่าพื้นฐานและสิทธิ์บอท ---
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -17,7 +17,7 @@ sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
 # คิวเพลง
 song_queue = []
 
-# การตั้งค่าดึงเสียง (ปรับเพื่อลดการโดนบล็อก)
+# --- 2. การตั้งค่าการดึงเสียงและ FFmpeg ---
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -36,16 +36,15 @@ FFMPEG_OPTIONS = {
     'options': '-vn'
 }
 
-# --- ระบบจัดการการเล่นเพลง ---
+# --- 3. ระบบจัดการเพลง (หัวใจสำคัญ) ---
 
 def play_next(ctx):
     if len(song_queue) > 0:
-        song_queue.pop(0) # ลบเพลงที่เล่นจบแล้ว
+        song_queue.pop(0) # ลบเพลงที่เล่นจบ
         if len(song_queue) > 0:
             next_song = song_queue[0]
-            # ใช้ bot.loop เพื่อรันฟังก์ชัน async ใน callback
             coro = start_playing(ctx, next_song)
-            fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+            asyncio.run_coroutine_threadsafe(coro, bot.loop)
         else:
             asyncio.run_coroutine_threadsafe(ctx.send("หมดคิวแล้วจ้า! เพิ่มเพลงได้นะคุณเปรม"), bot.loop)
 
@@ -58,17 +57,17 @@ async def start_playing(ctx, song_info):
             info = ydl.extract_info(song_info['url'], download=False)
             url = info['url'] if 'url' in info else info['entries'][0]['url']
             
-            # แก้ไข: ห้ามใส่ await หน้า FFmpegOpusAudio (แก้ Error ในรูป 7ac305)
+            # ✅ แก้ไขจุดตาย: ห้ามมี await หน้า FFmpegOpusAudio (แก้ Error ในรูป 7ace89)
             source = discord.FFmpegOpusAudio.from_probe(url, **FFMPEG_OPTIONS)
             
             vc.play(source, after=lambda e: play_next(ctx))
             await ctx.send(f"🎶 **กำลังเล่น:** {song_info['title']}")
         except Exception as e:
             print(f"Error: {e}")
-            await ctx.send(f"⚠️ เล่นเพลง '{song_info['title']}' ไม่ได้ ข้ามไปเพลงถัดไปนะจ๊ะ")
+            await ctx.send(f"⚠️ YouTube บล็อกเพลงนี้ครับคุณเปรม ข้ามไปเพลงถัดไปนะ")
             play_next(ctx)
 
-# --- คำสั่งบอท ---
+# --- 4. คำสั่งบอท ---
 
 @bot.event
 async def on_ready():
@@ -80,7 +79,7 @@ async def play(ctx, *, search):
     vc = ctx.voice_client if ctx.voice_client else await ctx.author.voice.channel.connect()
 
     async with ctx.typing():
-        # 1. จัดการ Spotify
+        # ตรวจสอบว่าเป็น Spotify หรือไม่
         if "spotify.com" in search:
             try:
                 if "playlist" in search:
@@ -95,9 +94,9 @@ async def play(ctx, *, search):
                     song_queue.append({'url': f"ytsearch:{t['name']} {t['artists'][0]['name']}", 'title': t['name']})
                     await ctx.send(f"🔅 เพิ่มเพลง: **{t['name']}** เข้าคิว")
             except:
-                return await ctx.send("อ่าน Spotify ไม่ได้จ้า เช็ครหัสใน Railway ด้วยนะ")
+                return await ctx.send("อ่าน Spotify ไม่ได้จ้า เช็ครหัสใน Variables นะคุณเปรม")
         
-        # 2. ค้นหาทั่วไป
+        # ค้นหาจาก YouTube หรือชื่อเพลง
         else:
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
                 try:
@@ -106,9 +105,8 @@ async def play(ctx, *, search):
                     song_queue.append({'url': info['webpage_url'], 'title': info['title']})
                     await ctx.send(f"➕ เพิ่มเข้าคิว: **{info['title']}**")
                 except:
-                    return await ctx.send("❌ YouTube บล็อกครับ ลองเปลี่ยนชื่อเพลงดูนะ")
+                    return await ctx.send("❌ YouTube บล็อกการเข้าถึงครับ ลองเปลี่ยนชื่อเพลงดูนะ")
 
-        # ถ้าบอทไม่ได้เล่นเพลงอยู่ ให้เริ่มเล่น
         if not vc.is_playing() and len(song_queue) == 1:
             await start_playing(ctx, song_queue[0])
 
@@ -116,7 +114,7 @@ async def play(ctx, *, search):
 async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
-        await ctx.send("⏭️ ข้ามให้แล้วนะคุณเปรม!")
+        await ctx.send("⏭️ ข้ามเพลงให้แล้วนะคับ!")
 
 @bot.command()
 async def queue(ctx):
@@ -131,6 +129,6 @@ async def leave(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
         song_queue.clear()
-        await ctx.send("ไปแล้วนะ บ๊ายบาย! 👋")
+        await ctx.send("บอทไปแล้วนะ บ๊ายบาย! 👋")
 
 bot.run(os.environ.get("DISCORD_TOKEN"))
