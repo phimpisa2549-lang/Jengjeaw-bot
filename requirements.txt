@@ -1,5 +1,4 @@
 discord.py[voice]
 yt-dlp
-spotipy
 PyNaCl==1.5.0
 
