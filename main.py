@@ -1,12 +1,14 @@
-import os, asyncio, discord
+import os
+import asyncio
+import discord
 from discord.ext import commands
 import yt_dlp
 
+# --- 1. ตั้งค่าบอท ---
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# รายการคิวเพลง
 song_queue = []
 
 YDL_OPTIONS = {
@@ -14,9 +16,7 @@ YDL_OPTIONS = {
     'noplaylist': True,
     'quiet': True,
     'default_search': 'ytsearch',
-    'nocheckcertificate': True,
-    'source_address': '0.0.0.0',
-    'add_header': {'User-Agent': 'Mozilla/5.0'}
+    'nocheckcertificate': True
 }
 
 FFMPEG_OPTIONS = {
@@ -24,42 +24,47 @@ FFMPEG_OPTIONS = {
     'options': '-vn'
 }
 
-# --- ฟังก์ชันจัดการคิวและเล่นเพลงถัดไป ---
+# --- 2. ฟังก์ชันระบบเพลง ---
+
 def play_next(ctx):
     if len(song_queue) > 0:
-        song_queue.pop(0) # ลบเพลงที่เล่นจบแล้ว
+        song_queue.pop(0) # ลบเพลงที่จบแล้ว
         if len(song_queue) > 0:
             next_song = song_queue[0]
             coro = start_playing(ctx, next_song)
             asyncio.run_coroutine_threadsafe(coro, bot.loop)
         else:
-            asyncio.run_coroutine_threadsafe(ctx.send("หมดคิวเพลงแล้วนะคับคุณเปรม! 🎶"), bot.loop)
+            asyncio.run_coroutine_threadsafe(ctx.send("หมดคิวแล้วจ้าคุณเปรม! 👋"), bot.loop)
 
 async def start_playing(ctx, song_info):
     vc = ctx.voice_client
     if not vc: return
+    
     with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
         try:
             info = ydl.extract_info(song_info['url'], download=False)
             url = info['url'] if 'url' in info else info['entries'][0]['url']
             
-            # ✅ แก้บั๊กถาวร: ห้ามใช้ await หน้า FFmpegOpusAudio
+            # ✅ จุดที่ต้องระวังที่สุด: บรรทัดนี้ห้ามมี await นำหน้า
+            # เพื่อป้องกัน RuntimeWarning: coroutine was never awaited
             source = discord.FFmpegOpusAudio.from_probe(url, **FFMPEG_OPTIONS)
             
             vc.play(source, after=lambda e: play_next(ctx))
-            await ctx.send(f"▶️ ตอนนี้กำลังเล่น: **{song_info['title']}**")
-        except:
-            await ctx.send(f"❌ เล่นเพลง {song_info['title']} ไม่ได้จ้า")
+            await ctx.send(f"▶️ **ตอนนี้กำลังเล่น:** {song_info['title']}")
+        except Exception as e:
+            await ctx.send(f"❌ เล่นเพลงไม่ได้ครับ: {song_info['title']}")
             play_next(ctx)
+
+# --- 3. คำสั่งบอท ---
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user.name} is online!')
+    print(f'Bot {bot.user.name} Is Ready!')
 
 @bot.command()
 async def play(ctx, *, search):
     if not ctx.author.voice:
-        return await ctx.send("คุณเปรมต้องเข้าห้องเสียงก่อนนะคับ‼️")
+        return await ctx.send("คุณเปรมต้องเข้าห้องเสียงก่อนนะคับ!")
     
     vc = ctx.voice_client if ctx.voice_client else await ctx.author.voice.channel.connect()
 
@@ -75,32 +80,30 @@ async def play(ctx, *, search):
                 if not vc.is_playing():
                     await start_playing(ctx, song_data)
                 else:
-                    await ctx.send(f"➕ เพิ่มเพลง **{info['title']}** ลงในคิว (ลำดับที่ {len(song_queue)-1})")
+                    await ctx.send(f"➕ เพิ่มเข้าคิว: **{info['title']}** (ลำดับที่ {len(song_queue)-1})")
             except:
-                await ctx.send("❌ หาเพลงไม่เจอครับ ลองเปลี่ยนชื่อเพลงดูนะ")
+                await ctx.send("❌ หาเพลงไม่เจอจ้า")
 
 @bot.command()
 async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
-        ctx.voice_client.stop() # จะไปเรียก play_next ให้อัตโนมัติ
+        ctx.voice_client.stop()
         await ctx.send("⏭️ ข้ามเพลงให้แล้วนะคับคุณเปรม!")
 
 @bot.command()
 async def queue(ctx):
     if not song_queue:
-        await ctx.send("ตอนนี้ยังไม่มีคิวเพลงครับคุณเปรม 🎶")
-    else:
-        msg = "**🎵 รายการคิวเพลงตอนนี้:**\n"
-        for i, song in enumerate(song_queue[:10], 1):
-            msg += f"{'▶️ กำลังเล่น' if i == 1 else str(i-1) + '.'}: {song['title']}\n"
-        await ctx.send(msg)
+        return await ctx.send("คิวว่างจ้า 🎶")
+    msg = "**🎵 รายการคิวเพลงตอนนี้:**\n"
+    for i, s in enumerate(song_queue[:10], 1):
+        msg += f"{'▶️ กำลังเล่น' if i==1 else str(i-1)+'.'}: {s['title']}\n"
+    await ctx.send(msg)
 
 @bot.command()
 async def stop(ctx):
     if ctx.voice_client:
         song_queue.clear()
         await ctx.voice_client.disconnect()
-        await ctx.send("ปิดเพลงและล้างคิวเรียบร้อยจ้า! 👋")
+        await ctx.send("ปิดบอทและล้างคิวแล้วจ้า!")
 
-token = os.environ.get("DISCORD_TOKEN")
-bot.run(token)
+bot.run(os.environ.get("DISCORD_TOKEN"))
